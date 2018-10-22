@@ -129,36 +129,50 @@ int main(int argc, char * argv[]) {
         BoundedBuffer request_buffer(b);
 		Histogram hist;
 
-        for(int i = 0; i < n; ++i) {
-            request_buffer.push("data John Smith");
-            request_buffer.push("data Jane Smith");
-            request_buffer.push("data Joe Smith");
-        }
+        pthread_t thread1, thread2, thread3;
+        request_struct arg1;
+        arg1.n = n;
+        arg1.name = "John Smith";
+        arg1.buffer = &request_buffer;
+
+        request_struct arg2;
+        arg2.n = n;
+        arg2.name = "Jane Smith";
+        arg2.buffer = &request_buffer;
+
+        request_struct arg3;
+        arg3.n = n;
+        arg3.name = "Joe Smith";
+        arg3.buffer = &request_buffer;
+
+        pthread_create(&thread1, NULL, &request_thread_function, (void*) &arg1);
+        pthread_create(&thread2, NULL, &request_thread_function, (void*) &arg2);
+        pthread_create(&thread3, NULL, &request_thread_function, (void*) &arg3);
+        pthread_join(thread1, NULL);
+        pthread_join(thread2, NULL);
+        pthread_join(thread3, NULL);
+
         cout << "Done populating request buffer" << endl;
 
         cout << "Pushing quit requests... ";
+
+        pthread_t threads[w];
+        worker_struct args[w];
+        void* retvals[w];
+
         for(int i = 0; i < w; ++i) {
             request_buffer.push("quit");
+            chan->cwrite("newchannel");
+            string s = chan->cread ();
+            RequestChannel *workerChannel = new RequestChannel(s, RequestChannel::CLIENT_SIDE);
+            args[i].workerChannel = workerChannel;
+            args[i].buffer = &request_buffer;
+            args[i].histogram = &hist;
+            pthread_create(&threads[i], NULL, &worker_thread_function, (void*) &args[i]);
         }
-        cout << "done." << endl;
 
-	
-        chan->cwrite("newchannel");
-		string s = chan->cread ();
-        RequestChannel *workerChannel = new RequestChannel(s, RequestChannel::CLIENT_SIDE);
+        for(int i = 0; i < w; ++i) pthread_join(threads[i], &retvals[i]);
 
-        while(true) {
-            string request = request_buffer.pop();
-			workerChannel->cwrite(request);
-
-			if(request == "quit") {
-			   	delete workerChannel;
-                break;
-            }else{
-				string response = workerChannel->cread();
-				hist.update (request, response);
-			}
-        }
         chan->cwrite ("quit");
         delete chan;
         cout << "All Done!!!" << endl; 

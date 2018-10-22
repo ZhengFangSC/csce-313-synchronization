@@ -8,7 +8,11 @@ using namespace std;
 
 class BoundedBuffer {
 private:
-	queue<string> q;	
+	queue<string> q;
+    int cap;
+    pthread_mutex_t mut;	
+    pthread_cond_t empty;
+    pthread_cond_t full;
 public:
     BoundedBuffer(int);
 	~BoundedBuffer();

@@ -4,30 +4,39 @@
 using namespace std;
 
 BoundedBuffer::BoundedBuffer(int _cap) {
-	
+	pthread_mutex_init(&mut, NULL);
+	cap = _cap;
 }
 
 BoundedBuffer::~BoundedBuffer() {
-	
+	pthread_mutex_destroy(&mut);
 }
 
 int BoundedBuffer::size() {
-	return q.size();
+	pthread_mutex_lock(&mut);
+	int size = q.size();
+	pthread_mutex_unlock(&mut);
+	return size;
 }
 
 void BoundedBuffer::push(string str) {
-	/*
-	Is this function thread-safe??? Does this automatically wait for the pop() to make room 
-	when the buffer if full to capacity???
-	*/
-	q.push (str);
+	pthread_mutex_lock(&mut);
+	while (q.size() == cap){
+		pthread_cond_wait(&full, &mut);
+	}
+	q.push(str);
+	pthread_mutex_unlock(&mut);
+	pthread_cond_signal(&empty);
 }
 
 string BoundedBuffer::pop() {
-	/*
-	Is this function thread-safe??? Does this automatically wait for the push() to make data available???
-	*/
+	pthread_mutex_lock(&mut);
+	while (q.size() == 0){
+		pthread_cond_wait(&empty, &mut);
+	}
 	string s = q.front();
 	q.pop();
+	pthread_cond_signal(&full);
+	pthread_mutex_unlock(&mut);
 	return s;
 }
