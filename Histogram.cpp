@@ -5,23 +5,25 @@ using namespace std;
 
 #include "Histogram.h"
 
-Histogram::Histogram(){
+Histogram::Histogram(string _names[3]){
 	for (int i=0; i<3; i++){
 		memset (hist[i], 0, 10 * sizeof (int));	
 	}
-	map ["data John Smith"] = 0;
-	map ["data Jane Smith"] = 1;
-	map ["data Joe Smith"] = 2;
+	map ["data " + _names[0]] = 0;
+	map ["data " + _names[1]] = 1;
+	map ["data " + _names[2]] = 2;
 
-	names.push_back ("John Smith");
-	names.push_back ("Jane Smith");
-	names.push_back ("Joe Smith");
+	names.push_back (_names[0]);
+	names.push_back (_names[1]);
+	names.push_back (_names[2]);
+
+	for (int i = 0; i < 3; ++i) pthread_mutex_init(&locks[i], NULL);
 }
 void Histogram::update (string request, string response){
-	pthread_mutex_lock(&mut);
 	int person_index = map [request];
+	pthread_mutex_lock(&locks[person_index]);
 	hist [person_index][stoi(response) / 10] ++;
-	pthread_mutex_unlock(&mut);
+	pthread_mutex_unlock(&locks[person_index]);
 }
 void Histogram::print(){
 	cout << setw(10) << right << "Range";

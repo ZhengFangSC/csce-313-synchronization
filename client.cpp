@@ -38,12 +38,19 @@ using namespace std;
 struct request_struct {
     int n;
     string name;
-    BoundedBuffer* buffer;
+    BoundedBuffer* request_buffer;
 };
 
 struct worker_struct {
     RequestChannel* workerChannel;
-    BoundedBuffer* buffer;
+    BoundedBuffer* request_buffer;
+    BoundedBuffer* response_buffers[3];
+    string names[3];
+};
+
+struct stat_struct {
+    BoundedBuffer* response_buffer;
+    string name;
     Histogram* histogram;
 };
 
@@ -51,7 +58,7 @@ void* request_thread_function(void* arg) {
     request_struct* args = (request_struct*) arg;
 
 	for(int i = 0; i < args->n; ++i) {
-        args->buffer->push("data " + args->name);
+        args->request_buffer->push("data " + args->name);
 	}
     pthread_exit(NULL);
 }
@@ -60,7 +67,7 @@ void* worker_thread_function(void* arg) {
     worker_struct* args = (worker_struct*) arg;
 
     while(true) {
-        string request = args->buffer->pop();
+        string request = args->request_buffer->pop();
         args->workerChannel->cwrite(request);
 
         if(request == "quit") {
@@ -70,25 +77,33 @@ void* worker_thread_function(void* arg) {
             break;
         }else{
             string response = args->workerChannel->cread();
-            args->histogram->update (request, response);
+            if (request == "data " + args->names[0]){
+                args->response_buffers[0]->push(response);
+            }
+            else if (request == "data " + args->names[1]){
+                args->response_buffers[1]->push(response);
+            }
+            else if (request == "data " + args->names[2]){
+                args->response_buffers[2]->push(response);
+            }
+            //args->histogram->update (request, response);
         }
     }
 }
 
 void* stat_thread_function(void* arg) {
-    /*
-		Fill in this function. 
-
-		There should 1 such thread for each person. Each stat thread 
-        must consume from the respective statistics buffer and update
-        the histogram. Since a thread only works on its own part of 
-        histogram, does the Histogram class need to be thread-safe????
-
-     */
-
-    for(;;) {
-
+    do{
+        stat_struct* args = (stat_struct*) arg;
+        string response = args->response_buffer->pop();
+        if (response == "quit"){
+            pthread_exit(NULL);
+            break;
+        }
+        else{
+            args->histogram->update("data " + args->name, response);
+        }
     }
+    while(true);
 }
 
 
@@ -127,50 +142,54 @@ int main(int argc, char * argv[]) {
 
         RequestChannel *chan = new RequestChannel("control", RequestChannel::CLIENT_SIDE);
         BoundedBuffer request_buffer(b);
-		Histogram hist;
+        BoundedBuffer response_buffers[3] = {BoundedBuffer(b/3), BoundedBuffer(b/3), BoundedBuffer(b/3)};
+        string names[3] = {"John Smith", "Jane Smith", "Joe Smith"};
+		Histogram hist(names);
 
-        pthread_t thread1, thread2, thread3;
-        request_struct arg1;
-        arg1.n = n;
-        arg1.name = "John Smith";
-        arg1.buffer = &request_buffer;
+        cout << "Creating Request Threads..." << endl;
 
-        request_struct arg2;
-        arg2.n = n;
-        arg2.name = "Jane Smith";
-        arg2.buffer = &request_buffer;
+        pthread_t request_threads[3];
+        request_struct request_args[3];
+        for (int i = 0; i < 3; ++i){
+            request_args[i].n = n;
+            request_args[i].name = names[i];
+            request_args[i].request_buffer = &request_buffer;
+            pthread_create(&request_threads[i], NULL, &request_thread_function, (void*) &request_args[i]);
+        }
 
-        request_struct arg3;
-        arg3.n = n;
-        arg3.name = "Joe Smith";
-        arg3.buffer = &request_buffer;
+        pthread_t worker_threads[w];
+        worker_struct worker_args[w];
 
-        pthread_create(&thread1, NULL, &request_thread_function, (void*) &arg1);
-        pthread_create(&thread2, NULL, &request_thread_function, (void*) &arg2);
-        pthread_create(&thread3, NULL, &request_thread_function, (void*) &arg3);
-
-        cout << "Done populating request buffer" << endl;
-
-        pthread_t threads[w];
-        worker_struct args[w];
+        cout << "Creating Worker Threads..." << endl;
 
         for(int i = 0; i < w; ++i) {
             chan->cwrite("newchannel");
             string s = chan->cread ();
             RequestChannel *workerChannel = new RequestChannel(s, RequestChannel::CLIENT_SIDE);
-            args[i].workerChannel = workerChannel;
-            args[i].buffer = &request_buffer;
-            args[i].histogram = &hist;
-            pthread_create(&threads[i], NULL, &worker_thread_function, (void*) &args[i]);
+            worker_args[i].workerChannel = workerChannel;
+            worker_args[i].request_buffer = &request_buffer;
+            for (int j = 0; j < 3; j++) worker_args[i].response_buffers[j] = &response_buffers[j];
+            for (int j = 0; j < 3; j++) worker_args[i].names[j] = names[j];
+            pthread_create(&worker_threads[i], NULL, &worker_thread_function, (void*) &worker_args[i]);
         }
 
-        cout << "Pushing quit requests... ";
+        cout << "Creating Stat Threads..." << endl;
 
-        pthread_join(thread1, NULL);
-        pthread_join(thread2, NULL);
-        pthread_join(thread3, NULL);
+        pthread_t stat_threads[3];
+        stat_struct stat_args[3];
+
+        for (int i = 0; i < 3; ++i){
+            stat_args[i].response_buffer = &response_buffers[i];
+            stat_args[i].name = names[i];
+            stat_args[i].histogram = &hist;
+            pthread_create(&stat_threads[i], NULL, &stat_thread_function, (void*) &stat_args[i]);
+        }
+
+        for(int i = 0; i < 3; ++i) pthread_join(request_threads[i], NULL);
         for(int i = 0; i < w; ++i) request_buffer.push("quit");
-        for(int i = 0; i < w; ++i) pthread_join(threads[i], NULL);
+        for(int i = 0; i < w; ++i) pthread_join(worker_threads[i], NULL);
+        for (int i = 0; i < 3; ++i) response_buffers[i].push("quit");
+        for(int i = 0; i < 3; ++i) pthread_join(stat_threads[i], NULL);
 
         chan->cwrite ("quit");
         delete chan;
