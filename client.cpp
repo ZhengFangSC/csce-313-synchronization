@@ -29,6 +29,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "reqchannel.h"
 #include "BoundedBuffer.h"
@@ -51,6 +52,10 @@ struct worker_struct {
 struct stat_struct {
     BoundedBuffer* response_buffer;
     string name;
+    Histogram* histogram;
+};
+
+struct hist_struct {
     Histogram* histogram;
 };
 
@@ -92,8 +97,8 @@ void* worker_thread_function(void* arg) {
 }
 
 void* stat_thread_function(void* arg) {
+    stat_struct* args = (stat_struct*) arg;
     do{
-        stat_struct* args = (stat_struct*) arg;
         string response = args->response_buffer->pop();
         if (response == "quit"){
             pthread_exit(NULL);
@@ -106,6 +111,14 @@ void* stat_thread_function(void* arg) {
     while(true);
 }
 
+void* display_histogram_function(void* arg){
+    hist_struct* args = (hist_struct*) arg; 
+    while (true){
+        system("clear");
+        args->histogram->print();
+        sleep(2);
+    }
+}
 
 /*--------------------------------------------------------------------------*/
 /* MAIN FUNCTION */
@@ -185,16 +198,20 @@ int main(int argc, char * argv[]) {
             pthread_create(&stat_threads[i], NULL, &stat_thread_function, (void*) &stat_args[i]);
         }
 
+        pthread_t histogram_thread;
+        hist_struct hist_args;
+        hist_args.histogram = &hist;
+        pthread_create(&histogram_thread, NULL, &display_histogram_function, (void*) &hist_args);
+
         for(int i = 0; i < 3; ++i) pthread_join(request_threads[i], NULL);
         for(int i = 0; i < w; ++i) request_buffer.push("quit");
         for(int i = 0; i < w; ++i) pthread_join(worker_threads[i], NULL);
         for (int i = 0; i < 3; ++i) response_buffers[i].push("quit");
         for(int i = 0; i < 3; ++i) pthread_join(stat_threads[i], NULL);
 
+        system("clear");
         chan->cwrite ("quit");
         delete chan;
-        cout << "All Done!!!" << endl; 
-
-		hist.print ();
+        hist.print();
     }
 }

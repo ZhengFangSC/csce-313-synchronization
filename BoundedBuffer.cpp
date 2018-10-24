@@ -26,7 +26,7 @@ int BoundedBuffer::size() {
 
 void BoundedBuffer::push(string str) {
 	pthread_mutex_lock(&mut);
-	while (q.size() == cap){
+	while (q.size() == cap + 1){
 		pthread_cond_wait(&full, &mut);
 	}
 	q.push(str);
