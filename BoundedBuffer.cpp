@@ -1,15 +1,20 @@
 #include "BoundedBuffer.h"
 #include <string>
 #include <queue>
+#include <iostream>
 using namespace std;
 
 BoundedBuffer::BoundedBuffer(int _cap) {
 	pthread_mutex_init(&mut, NULL);
+	pthread_cond_init(&full, NULL);
+	pthread_cond_init(&empty, NULL);
 	cap = _cap;
 }
 
 BoundedBuffer::~BoundedBuffer() {
 	pthread_mutex_destroy(&mut);
+	pthread_cond_destroy(&full);
+	pthread_cond_destroy(&empty);
 }
 
 int BoundedBuffer::size() {
