@@ -152,13 +152,13 @@ int main(int argc, char * argv[]) {
         cout << "w == " << w << endl;
         cout << "b == " << b << endl;
 		
-	clock_t begin = clock();
+        clock_t begin = clock();
 
         RequestChannel *chan = new RequestChannel("control", RequestChannel::CLIENT_SIDE);
         BoundedBuffer request_buffer(b);
         BoundedBuffer response_buffers[3] = {BoundedBuffer(b/3), BoundedBuffer(b/3), BoundedBuffer(b/3)};
         string names[3] = {"John Smith", "Jane Smith", "Joe Smith"};
-		Histogram hist(names);
+        Histogram hist(names);
 
         cout << "Creating Request Threads..." << endl;
 
@@ -202,7 +202,7 @@ int main(int argc, char * argv[]) {
         pthread_t histogram_thread;
         hist_struct hist_args;
         hist_args.histogram = &hist;
-        pthread_create(&histogram_thread, NULL, &display_histogram_function, (void*) &hist_args);
+        //pthread_create(&histogram_thread, NULL, &display_histogram_function, (void*) &hist_args);
 
         for(int i = 0; i < 3; ++i) pthread_join(request_threads[i], NULL);
         for(int i = 0; i < w; ++i) request_buffer.push("quit");
@@ -210,12 +210,12 @@ int main(int argc, char * argv[]) {
         for (int i = 0; i < 3; ++i) response_buffers[i].push("quit");
         for(int i = 0; i < 3; ++i) pthread_join(stat_threads[i], NULL);
 
-        system("clear");
+        //system("clear");
         chan->cwrite ("quit");
         delete chan;
-		
-	clock_t end = clock();
-	cout << "Time Elapsed: " << double(end - begin)/CLOCKS_PER_SEC << endl;
+        
+        clock_t end = clock();
+        cout << "Time Elapsed: " << double(end - begin)/CLOCKS_PER_SEC << endl;
         hist.print();
     }
 }
