@@ -151,6 +151,8 @@ int main(int argc, char * argv[]) {
         cout << "n == " << n << endl;
         cout << "w == " << w << endl;
         cout << "b == " << b << endl;
+		
+	clock_t begin = clock();
 
         RequestChannel *chan = new RequestChannel("control", RequestChannel::CLIENT_SIDE);
         BoundedBuffer request_buffer(b);
@@ -211,6 +213,9 @@ int main(int argc, char * argv[]) {
         system("clear");
         chan->cwrite ("quit");
         delete chan;
+		
+	clock_t end = clock();
+	cout << "Time Elapsed: " << double(end - begin)/CLOCKS_PER_SEC << endl;
         hist.print();
     }
 }
