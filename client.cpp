@@ -91,7 +91,6 @@ void* worker_thread_function(void* arg) {
             else if (request == "data " + args->names[2]){
                 args->response_buffers[2]->push(response);
             }
-            //args->histogram->update (request, response);
         }
     }
 }
